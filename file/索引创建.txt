@@ -1,0 +1,198 @@
+1.创建索引，需在elasticsearch-6.x.x/config下创建char_filter_text.txt，空文件就行
+curl -XPUT http://52.83.106.210:9200/cnki-3 -H 'Content-Type:application/json' -d'
+{
+  "settings": {
+    "analysis": {
+      "filter": {
+        "edge_ngram_filter": {
+          "type": "edge_ngram",
+          "min_gram": 1,
+          "max_gram": 50
+        },
+        "pinyin_simple_filter": {
+          "type": "pinyin",
+          "keep_first_letter": true,
+          "keep_separate_first_letter": false,
+          "keep_full_pinyin": false,
+          "keep_original": false,
+          "limit_first_letter_length": 50,
+          "lowercase": true
+        },
+        "pinyin_full_filter": {
+          "type": "pinyin",
+          "keep_first_letter": false,
+          "keep_separate_first_letter": false,
+          "keep_full_pinyin": true,
+          "none_chinese_pinyin_tokenize": true,
+          "keep_original": false,
+          "limit_first_letter_length": 50,
+          "lowercase": true
+        }
+      },
+      "char_filter": {
+        "charconvert": {
+          "type": "mapping",
+          "mappings_path": "char_filter_text.txt"
+        }
+      },
+      "tokenizer": {
+        "ik_max_word": {
+          "type": "ik_max_word",
+          "use_smart": true
+        }
+      },
+      "analyzer": {
+        "ngramIndexAnalyzer": {
+          "type": "custom",
+          "tokenizer": "keyword",
+          "filter": [
+            "edge_ngram_filter",
+            "lowercase"
+          ],
+          "char_filter": [
+            "charconvert"
+          ]
+        },
+        "ngramSearchAnalyzer": {
+          "type": "custom",
+          "tokenizer": "keyword",
+          "filter": [
+            "lowercase"
+          ],
+          "char_filter": [
+            "charconvert"
+          ]
+        },
+        "ikIndexAnalyzer": {
+          "type": "custom",
+          "tokenizer": "ik_max_word",
+          "char_filter": [
+            "charconvert"
+          ]
+        },
+        "ikSearchAnalyzer": {
+          "type": "custom",
+          "tokenizer": "ik_max_word",
+          "char_filter": [
+            "charconvert"
+          ]
+        },
+        "pinyiSimpleIndexAnalyzer": {
+          "tokenizer": "keyword",
+          "filter": [
+            "pinyin_simple_filter",
+            "edge_ngram_filter",
+            "lowercase"
+          ]
+        },
+        "pinyiSimpleSearchAnalyzer": {
+          "tokenizer": "keyword",
+          "filter": [
+            "pinyin_simple_filter",
+            "lowercase"
+          ]
+        },
+        "pinyiFullIndexAnalyzer": {
+          "tokenizer": "keyword",
+          "filter": [
+            "pinyin_full_filter",
+            "lowercase"
+          ]
+        },
+        "pinyiFullSearchAnalyzer": {
+          "tokenizer": "keyword",
+          "filter": [
+            "pinyin_full_filter",
+            "lowercase"
+          ]
+        }
+      }
+    }
+  }
+}'
+
+2.关联解析器
+CURL -XPUT http://52.83.106.210:9200/cnki-3/_mapping/spider -H 'Content-Type:application/json' -d'
+{
+  "properties": {
+    "title": {
+      "type": "text",
+      "analyzer": "ikIndexAnalyzer",
+      "fields": {
+        "ngram": {
+          "type": "text",
+          "analyzer": "ngramIndexAnalyzer"
+        },
+        "SPY": {
+          "type": "text",
+          "analyzer": "pinyiSimpleIndexAnalyzer"
+        },
+        "FPY": {
+          "type": "text",
+          "analyzer": "pinyiFullIndexAnalyzer"
+        }
+      }
+    },
+    "content": {
+      "type": "text",
+      "analyzer": "ikIndexAnalyzer",
+      "fields": {
+        "ngram": {
+          "type": "text",
+          "analyzer": "ngramIndexAnalyzer"
+        },
+        "SPY": {
+          "type": "text",
+          "analyzer": "pinyiSimpleIndexAnalyzer"
+        },
+        "FPY": {
+          "type": "text",
+          "analyzer": "pinyiFullIndexAnalyzer"
+        }
+      }
+    },
+    "authoer": {
+      "type": "text",
+      "analyzer": "ikIndexAnalyzer",
+      "fields": {
+        "ngram": {
+          "type": "text",
+          "analyzer": "ngramIndexAnalyzer"
+        },
+        "SPY": {
+          "type": "text",
+          "analyzer": "pinyiSimpleIndexAnalyzer"
+        },
+        "FPY": {
+          "type": "text",
+          "analyzer": "pinyiFullIndexAnalyzer"
+        }
+      }
+    },
+    "date" : {
+      "type" : "date"
+    },
+    "link" : {
+      "type" : "keyword"
+    },
+    "source" : {
+      "type" : "keyword"
+    },
+    "sp_date" : {
+      "type" : "date"
+    },
+    "sp_source" : {
+      "type" : "keyword"
+    },
+    "author": {
+      "type": "text",
+      "analyzer": "ik_max_word",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    }
+  }
+}'

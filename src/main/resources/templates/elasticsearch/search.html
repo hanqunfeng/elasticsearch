@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<html>
+<head>
+    <title>ElasticSearch</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <META http-equiv="Pragma" content="no-cache">
+    <META http-equiv="Cache-Control" content="no-cache">
+    <META http-equiv="Expire" content="0">
+
+    <script th:src="@{/js/jquery-1.11.0.min.js}"></script>
+
+    <style>
+        .highlight{
+            color:red;
+            background-color:yellow;
+            /*text-decoration:underline;*/
+            /*cursor:pointer;*/
+        }
+        .titlep{
+            color:dodgerblue;
+            text-decoration:underline;
+            cursor:pointer;
+        }
+
+        #querydiv{
+            margin-top:10px;
+            margin-bottom:10px;
+            margin-right:10px;
+            margin-left:10px;
+            padding: 3px;
+        }
+        #searchContent{
+            height: 50px;
+            width: 500px;
+
+
+            font-size: 30px;
+            border-color: dodgerblue;
+            border-width: thin;
+        }
+        #subbut{
+            height: 40px;
+            width: 80px;
+            font-size: 20px;
+            color: dodgerblue;
+            margin-left:20px;
+            cursor:pointer;
+        }
+        .datas{
+            margin-top:10px;
+            margin-bottom:10px;
+            margin-right:500px;
+            margin-left:10px;
+        }
+
+        .choiceWindow {
+            display: none;
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            width: 80%;
+            height: 80%;
+            padding: 20px;
+            border: 3px solid #ccc;
+            background-color: white;
+            z-index:2;
+            overflow: auto;
+        }
+        .backGround {
+            display: none;
+            position: absolute;
+            top: 0%;
+            left: 0%;
+            width: 100%;
+            height: 1100px;
+            background-color: black;
+            z-index:1;
+            -moz-opacity: 0.8;
+            opacity:.80;
+            filter: alpha(opacity=88);
+        }
+        #x:hover {cursor: pointer;color: rgb(55,198,192);}
+        .title{
+            font-size: 30px;
+            align-content: center;
+            padding: 20px;
+        }
+        .authorAndDate{
+            padding: 20px;
+            font-size: 15px;
+        }
+        .content{
+            padding: 20px;
+            font-size: 20px;
+        }
+
+    </style>
+
+    <script type="text/javascript">
+        $(function(){
+
+            var basePath = '[[${#httpServletRequest.getScheme() + "://" + #httpServletRequest.getServerName() + ":" + #httpServletRequest.getServerPort() + #httpServletRequest.getContextPath()}]]';
+
+
+
+
+            $("#prepage").click(function () {
+                var pageNumber =  $("#pageNumber").val();
+                $("#pageNumber").val(parseInt(pageNumber)-1);
+                $("#queryform").submit();
+            });
+
+            $("#nextpage").click(function () {
+                var pageNumber =  $("#pageNumber").val();
+                $("#pageNumber").val(parseInt(pageNumber)+1);
+                $("#queryform").submit();
+            });
+
+            $("#firstpage").click(function () {
+                var pageNumber =  1;
+                $("#pageNumber").val(parseInt(pageNumber)-1);
+                $("#queryform").submit();
+            });
+
+            $("#endpage").click(function () {
+                var pageNumber =  $("#totalpage").val();
+                $("#pageNumber").val(parseInt(pageNumber)-1);
+                $("#queryform").submit();
+            });
+
+            // $(".highlight").click(function () {
+            //     var content = $(this).html();
+            //     alert("content=="+content);
+            // });
+
+            $(".openContent").click(function () {
+                // var id = $(this).children("p").eq(0).text();
+                var id = $(this).parent().children("p").eq(0).text();
+                // alert("id=="+id);
+
+                $.getJSON(basePath+"/get/"+id,function (data) {
+                    $(".title").html(data.title);
+                    $(".authorAndDate").html("作者："+data.authoer+"&nbsp&nbsp&nbsp&nbsp时间："+data.date.replace("T00:00",""));
+                    $(".content").html(data.content);
+                });
+
+                $(".choiceWindow").slideDown(300);
+                $(".backGround").show();
+            });
+
+            $("#x").click(function(){
+                $(".choiceWindow").slideUp(300);
+                $(".backGround").hide();
+            });
+
+            $("#subbut").click(function () {
+                var pageNumber =  1;
+                $("#pageNumber").val(parseInt(pageNumber)-1);
+                $("#queryform").submit();
+            });
+
+
+
+
+
+        });
+
+        function checkKey() {
+            var keycode = (event.keyCode ? event.keyCode : event.which);
+            if (keycode == 13) {
+                var pageNumber =  1;
+                $("#pageNumber").val(parseInt(pageNumber)-1);
+                $("#queryform").submit();
+            }
+        }
+
+    </script>
+</head>
+<body onkeydown="checkKey()">
+<div class="">
+<div id="querydiv">
+    <form  id="queryform" name="queryform" th:action="@{/search}" method="post">
+        <input type="hidden" id="pageNumber" name="pageNumber" th:value="${pageNumber}">
+        <input type="hidden" id="pageSize" name="pageSize" th:value="${pageSize}">
+        <input type="hidden" id="totalpage" name="totalpage" th:value="${totalpage}">
+        <input type="text" id="searchContent" name="searchContent" th:value="${searchContent}"/>
+        <button id="subbut" type="button">查询</button>
+    </form>
+</div>
+<div class="datas" th:if="${datas!=null}">
+    为您找到相关结果约[[${totalelements}]]个，共[[${totalpage}]]页
+    <a id="firstpage" href="javascript:void(0);" th:if="${pageNumber > 0}">首页</a>
+    <a id="prepage" href="javascript:void(0);" th:if="${pageNumber > 0}">上一页</a>
+    第[[${pageNumber+1}]]页
+    <a id="nextpage" href="javascript:void(0);" th:if="${pageNumber < (totalpage-1) }">下一页</a>
+    <a id="endpage" href="javascript:void(0);" th:if="${pageNumber < (totalpage-1) }">尾页</a>
+    <hr style=" height:2px;border:none;border-top:2px dotted #185598;" />
+    <div th:each="item,status:${datas}">
+        <p th:text="${item.id}" style="display: none"></p>
+        <p>
+        <h2 class="openContent titlep" th:utext="${item.title}"></h2></p>
+        <p><span th:utext="${#strings.replace(item.date,'T00:00','')}"></span>
+        </p>
+        <p th:utext="${#strings.substring(item.content,0,200)+'......'}" th:if="${#strings.length(item.content)>=200}"></p>
+        <p th:utext="${item.content}" th:if="${#strings.length(item.content)<200}"></p>
+        <hr style=" height:2px;border:none;border-top:2px dotted #185598;" />
+    </div>
+
+</div>
+<div class="datas" th:if="${datas==null}">
+    很遗憾，没有查询到结果！再试试其它查询内容吧。
+</div>
+</div>
+
+<div class="choiceWindow">
+    <label id="x" style="position: absolute;top:2px;left: 95%;font-size: 20px;color: red;">[Close]</label>
+    <div class="title"></div>
+    <div class="authorAndDate"></div>
+    <div class="content"></div>
+</div>
+
+<div class="backGround"></div>
+
+</body>
+</html>
