@@ -1,5 +1,6 @@
 package com.pyf.elasticsearch.service;
 
+import com.pyf.elasticsearch.pojo.SearchPojo;
 import com.pyf.elasticsearch.utils.ChineseToPinYinUtil;
 import org.elasticsearch.action.admin.indices.analyze.AnalyzeRequest;
 import org.elasticsearch.action.admin.indices.analyze.AnalyzeResponse;
@@ -20,6 +21,7 @@ import org.springframework.data.elasticsearch.core.aggregation.AggregatedPage;
 import org.springframework.data.elasticsearch.core.aggregation.impl.AggregatedPageImpl;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
 import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
+import org.springframework.util.StringUtils;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -35,21 +37,21 @@ import java.util.Map;
 public abstract class BaseService<T> {
 
     @Autowired
-    private ElasticsearchTemplate elasticsearchTemplate;
+    protected ElasticsearchTemplate elasticsearchTemplate;
 
     public abstract T makePojoInfo(SearchHit searchHit);
 
     //中文、拼音混合搜索
-    private QueryBuilder chineseAndPinYinSearch(String words){
+    private QueryBuilder chineseAndPinYinSearch(String words) {
 
         //使用dis_max直接取多个query中，分数最高的那一个query的分数即可
-        DisMaxQueryBuilder disMaxQueryBuilder=QueryBuilders.disMaxQuery();
+        DisMaxQueryBuilder disMaxQueryBuilder = QueryBuilders.disMaxQuery();
 
         /**
          * 纯中文搜索，不做拼音转换,采用edge_ngram分词(优先级最高)
          * 权重* 5
          */
-        QueryBuilder normSearchBuilder=QueryBuilders.matchQuery("content.ngram",words).analyzer("ngramSearchAnalyzer").boost(5f);
+        QueryBuilder normSearchBuilder = QueryBuilders.matchQuery("content.ngram", words).analyzer("ngramSearchAnalyzer").boost(5f);
 
         /**
          * 拼音简写搜索
@@ -65,9 +67,9 @@ public abstract class BaseService<T> {
          * 拼音简写包含匹配，如 njdl可以查出 "城市公牛 南京东路店"，虽然非南京东路开头
          * 权重*0.8
          */
-        QueryBuilder  pingYinSampleContainQueryBuilder=null;
-        if(firstChar.length()>1){
-            pingYinSampleContainQueryBuilder=QueryBuilders.wildcardQuery("content.SPY", "*"+firstChar+"*").boost(0.8f);
+        QueryBuilder pingYinSampleContainQueryBuilder = null;
+        if (firstChar.length() > 1) {
+            pingYinSampleContainQueryBuilder = QueryBuilders.wildcardQuery("content.SPY", "*" + firstChar + "*").boost(0.8f);
         }
 
         /**
@@ -77,16 +79,16 @@ public abstract class BaseService<T> {
          * 3、如果有中文前缀，则排序优先
          * 权重*1
          */
-        QueryBuilder pingYinFullQueryBuilder=null;
-        if(words.length()>1){
-            pingYinFullQueryBuilder=QueryBuilders.matchPhraseQuery("content.FPY", words).analyzer("pinyiFullSearchAnalyzer");
+        QueryBuilder pingYinFullQueryBuilder = null;
+        if (words.length() > 1) {
+            pingYinFullQueryBuilder = QueryBuilders.matchPhraseQuery("content.FPY", words).analyzer("pinyiFullSearchAnalyzer");
         }
 
         /**
          * 完整包含关键字查询(优先级最低，只有以上四种方式查询无结果时才考虑）
          * 权重*0.8
          */
-        QueryBuilder containSearchBuilder=QueryBuilders.matchQuery("content", words).analyzer("ikSearchAnalyzer").minimumShouldMatch("100%");
+        QueryBuilder containSearchBuilder = QueryBuilders.matchQuery("content", words).analyzer("ikSearchAnalyzer").minimumShouldMatch("100%");
 
         disMaxQueryBuilder
                 .add(normSearchBuilder)
@@ -94,10 +96,10 @@ public abstract class BaseService<T> {
                 .add(containSearchBuilder);
 
         //以下两个对性能有一定的影响，故作此判定，单个字符不执行此类搜索
-        if(pingYinFullQueryBuilder!=null){
+        if (pingYinFullQueryBuilder != null) {
             disMaxQueryBuilder.add(pingYinFullQueryBuilder);
         }
-        if(pingYinSampleContainQueryBuilder!=null){
+        if (pingYinSampleContainQueryBuilder != null) {
             disMaxQueryBuilder.add(pingYinSampleContainQueryBuilder);
         }
 
@@ -105,50 +107,94 @@ public abstract class BaseService<T> {
     }
 
 
-
-
-
-
     public Page<T> highLigthQuery(final String searchMessage, Pageable pageable, Class<T> tClass) {
+        return highLigthQuery(searchMessage, pageable, tClass, null);
+    }
+
+
+    public Page<T> highLigthQuery(final String searchMessage, Pageable pageable, Class<T> tClass, SearchPojo searchPojo) {
 
         AnalyzeRequest analyzeRequest = new AnalyzeRequest()
                 .text(searchMessage)
                 .analyzer("ik_max_word");
-                //.analyzer("ik_smart");
-                //.analyzer("standard"); //这个是采用默认的分词器
+        //.analyzer("ik_smart");
+        //.analyzer("standard"); //这个是采用默认的分词器
 
         //获取分词效果
         List<AnalyzeResponse.AnalyzeToken> tokens = elasticsearchTemplate.getClient().admin().indices().analyze(analyzeRequest).actionGet().getTokens();
-        String[] tokenTerms = new String[tokens.size()];
-        for (AnalyzeResponse.AnalyzeToken token : tokens) {
-            System.out.println(token.getTerm());
-        }
 
         //QueryBuilder queryBuilder = QueryBuilders.queryStringQuery(searchMessage);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-
-
-        for (AnalyzeResponse.AnalyzeToken token : tokens) {
-            boolQueryBuilder.should(QueryBuilders.wildcardQuery("content","*"+token.getTerm()+"*")).should(QueryBuilders.wildcardQuery("title","*"+token.getTerm()+"*"));
-            //boolQueryBuilder.should(QueryBuilders.matchQuery("content.SPY",token.getTerm())).should(QueryBuilders.matchQuery("title.SPY",token.getTerm()));
+        QueryBuilder filterBuilder = null;
+        if (searchPojo != null && StringUtils.hasText(searchPojo.getTag()) && !searchPojo.getTag().equals("全部")) {
+            //boolQueryBuilder.must(QueryBuilders.termQuery("tags.keyword", tag));
+            filterBuilder = QueryBuilders.termQuery("tags", searchPojo.getTag());
+        } else {
+            filterBuilder = QueryBuilders.termsQuery("tags", "新闻", "文献");
         }
 
-        boolQueryBuilder.should(QueryBuilders.queryStringQuery(searchMessage));
+        String regex = "^[a-z0-9A-Z]+$";
+
+        for (AnalyzeResponse.AnalyzeToken token : tokens) {
+            System.out.println(token.getTerm());
+
+            if(searchPojo != null) {
+                if(searchPojo.getMustall()==null) {
+                    if (searchPojo.getPinyin() != null) {
+                        boolQueryBuilder.should(QueryBuilders.matchQuery("content.SPY", token.getTerm())).should(QueryBuilders.matchQuery("title.SPY", token.getTerm()));
+                    } else {
+                        if (token.getTerm().matches(regex)) {
+                            boolQueryBuilder.should(QueryBuilders.wildcardQuery("content", "*" + token.getTerm() + "*")).should(QueryBuilders.wildcardQuery("title", "*" + token.getTerm() + "*"));
+                        } else {
+                            boolQueryBuilder.should(QueryBuilders.matchQuery("content", token.getTerm())).should(QueryBuilders.matchQuery("title", token.getTerm()));
+                        }
+                    }
+                }else{
+                    BoolQueryBuilder boolQueryBuilder_title = QueryBuilders.boolQuery();
+                    BoolQueryBuilder boolQueryBuilder_content = QueryBuilders.boolQuery();
+                    BoolQueryBuilder boolQueryBuilder_all = QueryBuilders.boolQuery();
+                    if (searchPojo.getPinyin() != null) {
+                        boolQueryBuilder_content.must(QueryBuilders.matchQuery("content.SPY", token.getTerm()));
+                        boolQueryBuilder_title.must(QueryBuilders.matchQuery("title.SPY", token.getTerm()));
+                        boolQueryBuilder_all.should(boolQueryBuilder_content).should(boolQueryBuilder_title);
+                        boolQueryBuilder.must(boolQueryBuilder_all);
+                    } else {
+                        if (token.getTerm().matches(regex)) {
+                            boolQueryBuilder_content.must(QueryBuilders.wildcardQuery("content", "*" + token.getTerm() + "*"));
+                            boolQueryBuilder_title.must(QueryBuilders.wildcardQuery("title", "*" + token.getTerm() + "*"));
+                            boolQueryBuilder_all.should(boolQueryBuilder_content).should(boolQueryBuilder_title);
+                            boolQueryBuilder.must(boolQueryBuilder_all);
+                        } else {
+                            boolQueryBuilder_content.must(QueryBuilders.matchQuery("content", token.getTerm()));
+                            boolQueryBuilder_title.must(QueryBuilders.matchQuery("title", token.getTerm()));
+                            boolQueryBuilder_all.should(boolQueryBuilder_content).should(boolQueryBuilder_title);
+                            boolQueryBuilder.must(boolQueryBuilder_all);
+                        }
+                    }
+                }
+            }
+
+
+        }
+
+        //boolQueryBuilder.should(QueryBuilders.queryStringQuery(searchMessage));
 
 
         NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
                 //.withQuery(QueryBuilders.matchQuery(field, searchMessage))
-                .withQuery(boolQueryBuilder)
+                .withQuery(boolQueryBuilder).withFilter(filterBuilder)
                 .withHighlightFields(new HighlightBuilder.Field("*").requireFieldMatch(false).preTags("<span class='highlight'>").postTags("</span>"))
                 .withPageable(pageable).withSort(SortBuilders.scoreSort().order(SortOrder.DESC))
                 .build();
-        Page<T> pageS = elasticsearchTemplate.queryForPage(searchQuery, tClass);
+        //Page<T> pageS = elasticsearchTemplate.queryForPage(searchQuery, tClass);
         Page<T> page = elasticsearchTemplate.queryForPage(searchQuery, tClass, new SearchResultMapper() {
 
             @Override
             public <T> AggregatedPage<T> mapResults(SearchResponse response, Class<T> clazz, Pageable pageable) {
                 ArrayList<T> list = new ArrayList<T>();
                 SearchHits hits = response.getHits();
+                long total = hits.getTotalHits();//总记录数
+                //遍历当前页的记录
                 for (SearchHit searchHit : hits) {
                     if (hits.getHits().length <= 0) {
                         return null;
@@ -160,12 +206,11 @@ public abstract class BaseService<T> {
                         for (String key : map.keySet()) {
                             //map.keySet()返回的是所有key的值
                             HighlightField value = map.get(key);//得到每个key对应的value值
-                            String searchMs = searchMessage;
 
                             String highLightMessage = value.fragments()[0].toString();
-                            highLightMessage = highLightMessage.replaceAll("</span><span class='highlight'>","");
+                            highLightMessage = highLightMessage.replaceAll("</span><span class='highlight'>", "");
                             String setMethodName = parSetName(key);
-                            if(!setMethodName.contains(".keyword")&&!setMethodName.contains(".FPY")&&!setMethodName.contains(".SPY")&&!setMethodName.contains(".ngram")) {
+                            if (!setMethodName.contains(".keyword") && !setMethodName.contains(".FPY") && !setMethodName.contains(".SPY") && !setMethodName.contains(".ngram")) {
                                 Method setMethod = tClass.getMethod(setMethodName, String.class);
                                 setMethod.invoke(pojo, highLightMessage);
                             }
@@ -178,7 +223,7 @@ public abstract class BaseService<T> {
                     list.add(pojo);
                 }
                 if (list.size() > 0) {
-                    return new AggregatedPageImpl<T>((List<T>) list,pageable,pageS.getTotalElements());
+                    return new AggregatedPageImpl<T>((List<T>) list, pageable, total);
                 }
                 return null;
             }
@@ -192,7 +237,7 @@ public abstract class BaseService<T> {
      * @param fieldName
      * @return String
      */
-    private  String parSetName(String fieldName) {
+    private String parSetName(String fieldName) {
         if (null == fieldName || "".equals(fieldName)) {
             return null;
         }

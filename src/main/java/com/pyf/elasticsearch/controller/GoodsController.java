@@ -2,28 +2,17 @@ package com.pyf.elasticsearch.controller;
 
 import com.pyf.elasticsearch.dao.GoodsRepository;
 import com.pyf.elasticsearch.entity.GoodsInfo;
+import com.pyf.elasticsearch.service.GoodsService;
 import com.pyf.elasticsearch.utils.ElasticsearchUtil;
 import org.apache.commons.collections4.IteratorUtils;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.elasticsearch.core.ElasticsearchTemplate;
-import org.springframework.data.elasticsearch.core.SearchResultMapper;
-import org.springframework.data.elasticsearch.core.aggregation.AggregatedPage;
-import org.springframework.data.elasticsearch.core.aggregation.impl.AggregatedPageImpl;
-import org.springframework.data.elasticsearch.core.query.NativeSearchQuery;
-import org.springframework.data.elasticsearch.core.query.NativeSearchQueryBuilder;
 import org.springframework.data.elasticsearch.core.query.SearchQuery;
 import org.springframework.web.bind.annotation.*;
 
-import java.lang.reflect.Method;
 import java.util.*;
 
 /**
@@ -42,6 +31,9 @@ public class GoodsController {
 
     @Autowired
     private GoodsRepository goodsRepository;
+
+    @Autowired
+    private GoodsService goodsService;
 
 
     private List<String> getTitle() {
@@ -141,12 +133,17 @@ public class GoodsController {
         if (goodsInfos.iterator().hasNext()) {
             return "has init";
         }
+
+        //elasticsearchTemplate.putMapping(GoodsInfo.class);
+        //TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
         for (int i = 0; i < 40; i++) {
             GoodsInfo goodsInfo = new GoodsInfo();
             goodsInfo.setTitle(getTitle().get(i));
             goodsInfo.setContent(getContent().get(i));
             goodsInfo.setWeight(i);
             goodsInfo.setUserId(i % 10);
+            goodsInfo.setCreateDate(new Date());
+
             goodsRepository.save(goodsInfo);
         }
         return "init success";
@@ -186,67 +183,29 @@ public class GoodsController {
         return goodsInfo;
     }
 
+    @GetMapping("/getbydate")
+    public Iterable<GoodsInfo> getByDate(String startDate,String endDate){
+        return goodsService.getListByDate(startDate,endDate);
+    }
+
 
     @GetMapping("/getAll")
     public List<GoodsInfo> getAll(){
+
+        Calendar calendar = Calendar.getInstance();
+        System.out.println("目前时间：" + calendar.getTime());
+        System.out.println("Calendar时区：：" + calendar.getTimeZone().getID());
+        System.out.println("user.timezone：" + System.getProperty("user.timezone"));
+        System.out.println("user.country：" + System.getProperty("user.country"));
+        System.out.println("默认时区：" + TimeZone.getDefault().getID());
+
+
         Iterator<GoodsInfo> searchResult  = goodsRepository.findAll().iterator();
         List<GoodsInfo> list = IteratorUtils.toList(searchResult);
         return list;
     }
 
 
-    public List<GoodsInfo> highLigthQuery(String field, String searchMessage) {
-        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
-                //.withQuery(QueryBuilders.matchQuery(field, searchMessage))
-                .withQuery(QueryBuilders.queryStringQuery(searchMessage))
-                .withHighlightFields(new HighlightBuilder.Field("*").requireFieldMatch(false).preTags("<span class=\"highlight\">").postTags("</span>"))
-                .build();
-        Page<GoodsInfo> page = elasticsearchTemplate.queryForPage(searchQuery, GoodsInfo.class, new SearchResultMapper() {
-
-            @Override
-            public <T> AggregatedPage<T> mapResults(SearchResponse response, Class<T> clazz, Pageable pageable) {
-                ArrayList<GoodsInfo> poems = new ArrayList<GoodsInfo>();
-                SearchHits hits = response.getHits();
-                for (SearchHit searchHit : hits) {
-                    if (hits.getHits().length <= 0) {
-                        return null;
-                    }
-                    GoodsInfo poem = new GoodsInfo();
-
-                    poem.setId(searchHit.getId());
-                    poem.setTitle(String.valueOf(searchHit.getSourceAsMap().get("title")));
-                    poem.setContent(String.valueOf(searchHit.getSourceAsMap().get("content")));
-                    poem.setUserId((Integer)(searchHit.getSourceAsMap().get("userId")));
-                    poem.setWeight((Integer)(searchHit.getSourceAsMap().get("weight")));
-                    // 反射调用set方法将高亮内容设置进去
-                    try {
-                        Map<String, HighlightField> map = searchHit.getHighlightFields();
-                        for (String key : map.keySet()) {
-                            //map.keySet()返回的是所有key的值
-                            HighlightField value = map.get(key);//得到每个key对应的value值
-
-                            String highLightMessage = value.fragments()[0].toString();
-                            String setMethodName = parSetName(key);
-                            Class<? extends GoodsInfo> poemClazz = poem.getClass();
-                            Method setMethod = poemClazz.getMethod(setMethodName, String.class);
-                            setMethod.invoke(poem, highLightMessage);
-
-                        }
-
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    poems.add(poem);
-                }
-                if (poems.size() > 0) {
-                    return new AggregatedPageImpl<T>((List<T>) poems);
-                }
-                return null;
-            }
-        });
-        List<GoodsInfo> poems = page.getContent();
-        return poems;
-    }
 
     /**
      * 拼接在某属性的 set方法
@@ -272,25 +231,16 @@ public class GoodsController {
      */
     @GetMapping("/select/{q}")
     public List<GoodsInfo> selectSearch(@PathVariable String q) {
-        //QueryBuilder queryBuilder = QueryBuilders.queryStringQuery(q);
-        //QueryBuilder queryBuilder = QueryBuilders.matchQuery("content",q);
-        //SearchQuery searchQuery = new NativeSearchQueryBuilder().withQuery(queryBuilder)
-        //        .withSearchType(SearchType.DFS_QUERY_THEN_FETCH)
-        //        .withHighlightFields(new HighlightBuilder.Field("*").requireFieldMatch(false).preTags("<div>").postTags("</div>").matchedFields("*"))
-        //        //.withHighlightBuilder(new HighlightBuilder().field("content").field("title").requireFieldMatch(false).preTags("<div>").postTags("</div>"))
-        //        .build();
-        //
-        //HighlightBuilder.Field fields[] = searchQuery.getHighlightFields();
-        //for(HighlightBuilder.Field field : fields) {
-        //    System.out.println(field.name());
-        //}
-        //Page<GoodsInfo> goodsPage = goodsRepository.search(searchQuery);
+        Pageable pageable = PageRequest.of(0, 5);
+        Page<GoodsInfo> pages = goodsService.highLigthQuery(q,pageable,GoodsInfo.class);
+        if(pages!=null&&pages.getSize()>0){
+            List<GoodsInfo> list = pages.getContent();
+            //存储日期时，默认0时区，与北京时间差8个小时，但是实际的时间是准确的，取出来时会根据系统时区进行转换为正确的时间，也就是显示的时候不会错误的，但是json格式是0时区，这里要注意
+            System.out.println(list.get(0).getCreateDate());
+            return list;
+        }
 
-
-        //List<GoodsInfo> list = goodsPage.getContent();
-        List<GoodsInfo> list = highLigthQuery("content",q);
-        System.out.println(list.size());
-        return list;
+        return null;
     }
 
     @GetMapping("/search")

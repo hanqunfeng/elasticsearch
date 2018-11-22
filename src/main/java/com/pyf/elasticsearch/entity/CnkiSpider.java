@@ -11,7 +11,7 @@ import java.io.Serializable;
  * Created by hanqf on 2018/11/12 12:38.
  */
 
-@Document(indexName = "cnki-3",type = "spider")
+@Document(indexName = "cnki-6",type = "spider")
 @Data
 public class CnkiSpider implements Serializable {
 
@@ -26,4 +26,6 @@ public class CnkiSpider implements Serializable {
 
     private String date;
     private String sp_date;
+
+    private String tags;
 }

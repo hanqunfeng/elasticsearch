@@ -8,6 +8,8 @@
     <META http-equiv="Cache-Control" content="no-cache">
     <META http-equiv="Expire" content="0">
 
+    <link rel="stylesheet" th:href="@{/font-awesome-4.7.0/css/font-awesome.min.css}">
+
     <script th:src="@{/js/jquery-1.11.0.min.js}"></script>
 
     <style>
@@ -21,32 +23,33 @@
             color:dodgerblue;
             text-decoration:underline;
             cursor:pointer;
+            /*padding-bottom:1px;*/
+            /*border-bottom:2px solid #518a78;*/
         }
 
-        #querydiv{
-            margin-top:10px;
-            margin-bottom:10px;
-            margin-right:10px;
-            margin-left:10px;
-            padding: 3px;
-        }
-        #searchContent{
-            height: 50px;
-            width: 500px;
+        /*#querydiv{*/
+            /*vertical-align: top;*/
+        /*}*/
+        /*#searchContent{*/
+            /*height: 40px;*/
+            /*width: 500px;*/
 
 
-            font-size: 30px;
-            border-color: dodgerblue;
-            border-width: thin;
-        }
-        #subbut{
-            height: 40px;
-            width: 80px;
-            font-size: 20px;
-            color: dodgerblue;
-            margin-left:20px;
-            cursor:pointer;
-        }
+            /*font-size: 30px;*/
+            /*border-color: dodgerblue;*/
+            /*border-width: thin;*/
+            /*margin-right: 0px;*/
+            /*margin-left: 10px;*/
+
+        /*}*/
+        /*#subbut{*/
+            /*height: 40px;*/
+            /*width: 80px;*/
+            /*font-size: 20px;*/
+            /*color: dodgerblue;*/
+            /*margin-left:0px;*/
+            /*cursor:pointer;*/
+        /*}*/
         .datas{
             margin-top:10px;
             margin-bottom:10px;
@@ -94,6 +97,97 @@
             padding: 20px;
             font-size: 20px;
         }
+
+
+        .search-box {overflow: hidden;font-size: 0}
+        .search-box input,.search-box button{border:none;padding:5px;vertical-align: top;}
+        .search-box input{border:2px solid #518a78;width:500px;height:30px;margin-left: 10px;font-size: 20px;}
+        .search-box button{width:90px;height:44px;background: #518a78;font-size: 20px;cursor:pointer;}
+
+        .tags{
+            margin: 10px;
+            margin-right:500px;
+            background-color: #eeeeee;
+
+        }
+        .tags span{
+            margin: 10px;
+            font-size: 19px;
+            color: #518a78;
+            cursor:pointer;
+            /*font-weight: bolder;*/
+        }
+
+        .selectSpan{
+            margin: 10px;
+            font-size: 19px;
+            color: #518a78;
+            cursor:pointer;
+            font-weight: bolder;
+            padding-bottom:1px;
+            border-bottom:2px solid #518a78;
+        }
+
+        .seniorbut{
+            margin-left: 10px;
+        }
+
+        .senior{
+            margin: 10px;
+            margin-left: 15px;
+            /*display: none;*/
+        }
+
+
+        input[type="checkbox"] + label::before {
+            content: "\a0";  /*不换行空格*/
+            display: inline-block;
+            vertical-align: .2em;
+            width: 1.2em;
+            height: 1.2em;
+            margin-right: .2em;
+            border-radius: .2em;
+            /*background-color: antiquewhite;*/
+            background-color: silver;
+            text-indent: .25em;
+            line-height: 1.15;  /*行高不加单位，子元素将继承数字乘以自身字体尺寸而非父元素行高*/
+        }
+
+        input[type="checkbox"]:checked + label::before {
+            content: "\2713";
+            background-color: yellowgreen;
+        }
+
+        input[type="checkbox"] {
+            position: absolute;
+            clip: rect(0, 0, 0, 0);
+
+        }
+
+        input[type="checkbox"]:focus + label::before {
+            box-shadow: 0 0 .1em .1em #58a;
+        }
+        input[type="checkbox"]:disabled + label::before {
+            background-color: gray;
+            box-shadow: none;
+            color: #555;
+        }
+
+        .suggestspan{
+            color:dodgerblue;
+            text-decoration:underline;
+            cursor:pointer;
+        }
+
+        /*.spe{*/
+            /*text-decoration:none;*/
+            /*cursor: none;*/
+        /*}*/
+
+
+
+
+
 
     </style>
 
@@ -160,6 +254,33 @@
                 $("#queryform").submit();
             });
 
+            $(".tags span").click(function () {
+                var content = $(this).text();
+                var tag = $("#tag").val();
+                if(tag!=content) {
+                    // alert(content);
+                    $(this).addClass("selectSpan");
+                    $(this).siblings().removeClass("selectSpan");
+
+                    $("#tag").val(content);
+                    var pageNumber = 1;
+                    $("#pageNumber").val(parseInt(pageNumber) - 1);
+                    $("#queryform").submit();
+                }
+            });
+
+            $(".suggestspan").click(function () {
+                var content = $(this).text();
+                content = content.replace(/^\s+|\s+$/g,"");
+                content = content.replace(",","");
+                $("#searchContent").val(content);
+                var pageNumber = 1;
+                $("#pageNumber").val(parseInt(pageNumber) - 1);
+                $("#queryform").submit();
+
+            });
+
+
 
 
 
@@ -178,16 +299,52 @@
     </script>
 </head>
 <body onkeydown="checkKey()">
-<div class="">
-<div id="querydiv">
+<div>
+
     <form  id="queryform" name="queryform" th:action="@{/search}" method="post">
+        <div id="querydiv" class="search-box">
+        <input type="hidden" id="tag" name="tag" th:value="${searchPojo.tag}">
         <input type="hidden" id="pageNumber" name="pageNumber" th:value="${pageNumber}">
         <input type="hidden" id="pageSize" name="pageSize" th:value="${pageSize}">
         <input type="hidden" id="totalpage" name="totalpage" th:value="${totalpage}">
-        <input type="text" id="searchContent" name="searchContent" th:value="${searchContent}"/>
-        <button id="subbut" type="button">查询</button>
+        <input type="text" id="searchContent" name="searchContent"  th:value="${searchContent}"/><button id="subbut" type="button" class="fa fa-search fa-2x">搜索</button>
+
+        <!--<button class="seniorbut" type="button">高级搜索</button>-->
+        </div>
+
+        <div class="senior">
+            <span>[高级搜索]：</span>
+
+            <input type="checkbox" id="mustall" name="mustall" value="yes" th:if="${searchPojo.mustall}" checked/>
+            <input type="checkbox" id="mustall" name="mustall" value="yes" th:if="${searchPojo.mustall==null}" />
+            <label for="mustall"> [必须包含全部搜索内容]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</label>
+
+
+            <input type="checkbox" id="pinyin" name="pinyin" value="yes" th:if="${searchPojo.pinyin}" checked/>
+            <input type="checkbox" id="pinyin" name="pinyin" value="yes" th:if="${searchPojo.pinyin==null}" />
+            <label for="pinyin"> [按拼音搜索(如：xny=>新能源，xinnengyuan=>新能源)]</label>
+
+
+        </div>
+
     </form>
+
+
+
+
+
+<div class="tags">
+    <span th:if="${searchPojo.tag == '全部'}" class="selectSpan">全部</span>
+    <span th:if="${searchPojo.tag != '全部'}">全部</span>
+    <span th:if="${searchPojo.tag == '新闻'}" class="selectSpan">新闻</span>
+    <span th:if="${searchPojo.tag != '新闻'}">新闻</span>
+    <span th:if="${searchPojo.tag == '文献'}" class="selectSpan">文献</span>
+    <span th:if="${searchPojo.tag != '文献'}">文献</span>
+    <!--<hr style=" height:2px;border:none;border-top:2px dotted #185598;" />-->
 </div>
+
+
+
 <div class="datas" th:if="${datas!=null}">
     为您找到相关结果约[[${totalelements}]]个，共[[${totalpage}]]页
     <a id="firstpage" href="javascript:void(0);" th:if="${pageNumber > 0}">首页</a>
@@ -201,15 +358,30 @@
         <p>
         <h2 class="openContent titlep" th:utext="${item.title}"></h2></p>
         <p><span th:utext="${#strings.replace(item.date,'T00:00','')}"></span>
+            <span th:if="${item.tags != null}" th:text="${item.tags}" style="color: #518a78"/>
+            <!--<span style="color: #518a78">新闻</span>-->
         </p>
-        <p th:utext="${#strings.substring(item.content,0,200)+'......'}" th:if="${#strings.length(item.content)>=200}"></p>
-        <p th:utext="${item.content}" th:if="${#strings.length(item.content)<200}"></p>
+        <p th:text="${#strings.substring(item.content,0,200)+'......'}" th:if="${#strings.length(item.content)>=200 and searchPojo.pinyin !=null}"></p>
+        <p th:text="${item.content}" th:if="${#strings.length(item.content)<200 and searchPojo.pinyin!=null}"></p>
+        <p th:utext="${item.content}" th:if="${searchPojo.pinyin==null}"></p>
         <hr style=" height:2px;border:none;border-top:2px dotted #185598;" />
     </div>
 
 </div>
-<div class="datas" th:if="${datas==null}">
+<div class="datas" th:if="${nocontent}">
+   请输入要查询的内容
+</div>
+
+<div class="datas" th:if="${datas==null and nocontent == false}">
     很遗憾，没有查询到结果！再试试其它查询内容吧。
+    <div th:if="${suggests!=null}" style="margin: 10px"/>
+        <span th:if="${#arrays.length(suggests) > 0}">你是否要查找：</span>
+        <span th:each="item,status:${suggests}">
+            <span class="suggestspan" th:utext="${item}"></span> <span class="spe" th:if="${status.size>1 and status.count < status.size}">,</span>
+        </span>
+
+
+    </div>
 </div>
 </div>
 
