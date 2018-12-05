@@ -10,7 +10,11 @@ import lombok.Data;
 @Data
 public class SearchPojo {
 
-    private String pinyin;
-    private String tag;
-    private String mustall;
+    private String searchContent;
+    private Integer pageNumber = 0;
+    private Integer pageSize = 20;
+    private boolean pinyin;
+    private String tag = "全部";
+    private boolean mustall;
+    private boolean isHighLight;
 }

@@ -1,11 +1,12 @@
 package com.pyf.elasticsearch.service;
 
 import com.pyf.elasticsearch.pojo.SearchPojo;
-import com.pyf.elasticsearch.utils.ChineseToPinYinUtil;
 import org.elasticsearch.action.admin.indices.analyze.AnalyzeRequest;
 import org.elasticsearch.action.admin.indices.analyze.AnalyzeResponse;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.index.query.*;
+import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
@@ -39,81 +40,21 @@ public abstract class BaseService<T> {
     @Autowired
     protected ElasticsearchTemplate elasticsearchTemplate;
 
+    /**
+     * 从查询结果中封装查询对象，子类需要实现
+     * @param searchHit
+     * @return
+     */
     public abstract T makePojoInfo(SearchHit searchHit);
 
-    //中文、拼音混合搜索
-    private QueryBuilder chineseAndPinYinSearch(String words) {
-
-        //使用dis_max直接取多个query中，分数最高的那一个query的分数即可
-        DisMaxQueryBuilder disMaxQueryBuilder = QueryBuilders.disMaxQuery();
-
-        /**
-         * 纯中文搜索，不做拼音转换,采用edge_ngram分词(优先级最高)
-         * 权重* 5
-         */
-        QueryBuilder normSearchBuilder = QueryBuilders.matchQuery("content.ngram", words).analyzer("ngramSearchAnalyzer").boost(5f);
-
-        /**
-         * 拼音简写搜索
-         * 1、分析key，转换为简写  case:  南京东路==>njdl，南京dl==>njdl，njdl==>njdl
-         * 2、搜索匹配，必须完整匹配简写词干
-         * 3、如果有中文前缀，则排序优先
-         * 权重*1
-         */
-        String firstChar = ChineseToPinYinUtil.ToFirstChar(words);
-        TermQueryBuilder pingYinSampleQueryBuilder = QueryBuilders.termQuery("content.SPY", firstChar);
-
-        /**
-         * 拼音简写包含匹配，如 njdl可以查出 "城市公牛 南京东路店"，虽然非南京东路开头
-         * 权重*0.8
-         */
-        QueryBuilder pingYinSampleContainQueryBuilder = null;
-        if (firstChar.length() > 1) {
-            pingYinSampleContainQueryBuilder = QueryBuilders.wildcardQuery("content.SPY", "*" + firstChar + "*").boost(0.8f);
-        }
-
-        /**
-         * 拼音全拼搜索
-         * 1、分析key，获取拼音词干   case :  南京东路==>[nan,jing,dong,lu]，南京donglu==>[nan,jing,dong,lu]
-         * 2、搜索查询，必须匹配所有拼音词，如南京东路，则nan,jing,dong,lu四个词干必须完全匹配
-         * 3、如果有中文前缀，则排序优先
-         * 权重*1
-         */
-        QueryBuilder pingYinFullQueryBuilder = null;
-        if (words.length() > 1) {
-            pingYinFullQueryBuilder = QueryBuilders.matchPhraseQuery("content.FPY", words).analyzer("pinyiFullSearchAnalyzer");
-        }
-
-        /**
-         * 完整包含关键字查询(优先级最低，只有以上四种方式查询无结果时才考虑）
-         * 权重*0.8
-         */
-        QueryBuilder containSearchBuilder = QueryBuilders.matchQuery("content", words).analyzer("ikSearchAnalyzer").minimumShouldMatch("100%");
-
-        disMaxQueryBuilder
-                .add(normSearchBuilder)
-                .add(pingYinSampleQueryBuilder)
-                .add(containSearchBuilder);
-
-        //以下两个对性能有一定的影响，故作此判定，单个字符不执行此类搜索
-        if (pingYinFullQueryBuilder != null) {
-            disMaxQueryBuilder.add(pingYinFullQueryBuilder);
-        }
-        if (pingYinSampleContainQueryBuilder != null) {
-            disMaxQueryBuilder.add(pingYinSampleContainQueryBuilder);
-        }
-
-        return disMaxQueryBuilder;
-    }
 
 
-    public Page<T> highLigthQuery(final String searchMessage, Pageable pageable, Class<T> tClass) {
-        return highLigthQuery(searchMessage, pageable, tClass, null);
-    }
-
-
-    public Page<T> highLigthQuery(final String searchMessage, Pageable pageable, Class<T> tClass, SearchPojo searchPojo) {
-
+    /**
+     * 基于搜索关键字构建查询对象QueryBuilder
+     * @param searchMessage
+     * @return
+     */
+    private BoolQueryBuilder makeBoolQueryBuilder(final String searchMessage,SearchPojo searchPojo){
         AnalyzeRequest analyzeRequest = new AnalyzeRequest()
                 .text(searchMessage)
                 .analyzer("ik_max_word");
@@ -123,15 +64,8 @@ public abstract class BaseService<T> {
         //获取分词效果
         List<AnalyzeResponse.AnalyzeToken> tokens = elasticsearchTemplate.getClient().admin().indices().analyze(analyzeRequest).actionGet().getTokens();
 
-        //QueryBuilder queryBuilder = QueryBuilders.queryStringQuery(searchMessage);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        QueryBuilder filterBuilder = null;
-        if (searchPojo != null && StringUtils.hasText(searchPojo.getTag()) && !searchPojo.getTag().equals("全部")) {
-            //boolQueryBuilder.must(QueryBuilders.termQuery("tags.keyword", tag));
-            filterBuilder = QueryBuilders.termQuery("tags", searchPojo.getTag());
-        } else {
-            filterBuilder = QueryBuilders.termsQuery("tags", "新闻", "文献");
-        }
+
 
         String regex = "^[a-z0-9A-Z]+$";
 
@@ -139,8 +73,8 @@ public abstract class BaseService<T> {
             System.out.println(token.getTerm());
 
             if(searchPojo != null) {
-                if(searchPojo.getMustall()==null) {
-                    if (searchPojo.getPinyin() != null) {
+                if(!searchPojo.isMustall()) {
+                    if (searchPojo.isPinyin()) {
                         boolQueryBuilder.should(QueryBuilders.matchQuery("content.SPY", token.getTerm())).should(QueryBuilders.matchQuery("title.SPY", token.getTerm()));
                     } else {
                         if (token.getTerm().matches(regex)) {
@@ -153,7 +87,7 @@ public abstract class BaseService<T> {
                     BoolQueryBuilder boolQueryBuilder_title = QueryBuilders.boolQuery();
                     BoolQueryBuilder boolQueryBuilder_content = QueryBuilders.boolQuery();
                     BoolQueryBuilder boolQueryBuilder_all = QueryBuilders.boolQuery();
-                    if (searchPojo.getPinyin() != null) {
+                    if (searchPojo.isPinyin()) {
                         boolQueryBuilder_content.must(QueryBuilders.matchQuery("content.SPY", token.getTerm()));
                         boolQueryBuilder_title.must(QueryBuilders.matchQuery("title.SPY", token.getTerm()));
                         boolQueryBuilder_all.should(boolQueryBuilder_content).should(boolQueryBuilder_title);
@@ -177,16 +111,56 @@ public abstract class BaseService<T> {
 
         }
 
-        //boolQueryBuilder.should(QueryBuilders.queryStringQuery(searchMessage));
+        return boolQueryBuilder;
 
+    }
+
+    /**
+     * 构建查询过滤器
+     * @param searchPojo
+     * @return
+     */
+    private QueryBuilder makeFilterBuilter(SearchPojo searchPojo){
+        QueryBuilder filterBuilder = null;
+        if (searchPojo != null && StringUtils.hasText(searchPojo.getTag()) && !searchPojo.getTag().equals("全部")) {
+            //boolQueryBuilder.must(QueryBuilders.termQuery("tags.keyword", tag));
+            filterBuilder = QueryBuilders.termQuery("tags", searchPojo.getTag());
+        } else {
+            filterBuilder = QueryBuilders.termsQuery("tags", "新闻", "文献");
+        }
+        return filterBuilder;
+    }
+
+    public Page<T> highLigthQuery(final String searchMessage, Pageable pageable, Class<T> tClass) {
+        return highLigthQuery(searchMessage, pageable, tClass, null);
+    }
+
+
+    public Page<T> query(final String searchMessage, Pageable pageable, Class<T> tClass, SearchPojo searchPojo){
+        NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
+                .withQuery(makeBoolQueryBuilder(searchMessage, searchPojo)).withFilter(makeFilterBuilter(searchPojo))
+                .withPageable(pageable).withSort(SortBuilders.scoreSort().order(SortOrder.DESC))
+                .build();
+        Page<T> page = elasticsearchTemplate.queryForPage(searchQuery, tClass);
+
+        return page;
+    }
+
+    /**
+     * 高亮显示查询逻辑
+     * @param searchMessage
+     * @param pageable
+     * @param tClass
+     * @param searchPojo
+     * @return
+     */
+    public Page<T> highLigthQuery(final String searchMessage, Pageable pageable, Class<T> tClass, SearchPojo searchPojo) {
 
         NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
-                //.withQuery(QueryBuilders.matchQuery(field, searchMessage))
-                .withQuery(boolQueryBuilder).withFilter(filterBuilder)
+                .withQuery(makeBoolQueryBuilder(searchMessage, searchPojo)).withFilter(makeFilterBuilter(searchPojo))
                 .withHighlightFields(new HighlightBuilder.Field("*").requireFieldMatch(false).preTags("<span class='highlight'>").postTags("</span>"))
                 .withPageable(pageable).withSort(SortBuilders.scoreSort().order(SortOrder.DESC))
                 .build();
-        //Page<T> pageS = elasticsearchTemplate.queryForPage(searchQuery, tClass);
         Page<T> page = elasticsearchTemplate.queryForPage(searchQuery, tClass, new SearchResultMapper() {
 
             @Override

@@ -31,9 +31,11 @@ public class IndexController {
     }
 
     @RequestMapping("/search")
-    public String search(String searchContent, Model model, @RequestParam(required = false,defaultValue = "0") Integer pageNumber, @RequestParam(required = false,defaultValue = "5")Integer pageSize, SearchPojo searchPojo){
+    public String search(Model model, SearchPojo searchPojo){
+
+        String searchContent = searchPojo.getSearchContent();
         if(searchContent!=null&&!"".equals(searchContent)) {
-            Pageable pageable = PageRequest.of(pageNumber, pageSize);
+            Pageable pageable = PageRequest.of(searchPojo.getPageNumber(), searchPojo.getPageSize());
             Page<CnkiSpider> pages = spiderService.highLigthQuery(searchContent, pageable,CnkiSpider.class,searchPojo);
             if(pages!=null&&pages.getSize()>0) {
                 model.addAttribute("datas", pages.getContent());
@@ -46,8 +48,8 @@ public class IndexController {
                     model.addAttribute("suggests", suggests);
                 }
             }
-            model.addAttribute("pageNumber", pageNumber);
-            model.addAttribute("pageSize", pageSize);
+            model.addAttribute("pageNumber", searchPojo.getPageNumber());
+            model.addAttribute("pageSize", searchPojo.getPageSize());
             model.addAttribute("searchContent", searchContent);
             model.addAttribute("nocontent", false);
         }else {

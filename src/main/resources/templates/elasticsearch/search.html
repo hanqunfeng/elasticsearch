@@ -304,8 +304,8 @@
     <form  id="queryform" name="queryform" th:action="@{/search}" method="post">
         <div id="querydiv" class="search-box">
         <input type="hidden" id="tag" name="tag" th:value="${searchPojo.tag}">
-        <input type="hidden" id="pageNumber" name="pageNumber" th:value="${pageNumber}">
-        <input type="hidden" id="pageSize" name="pageSize" th:value="${pageSize}">
+        <input type="hidden" id="pageNumber" name="pageNumber" th:value="${searchPojo.pageNumber}">
+        <input type="hidden" id="pageSize" name="pageSize" th:value="${searchPojo.pageSize}">
         <input type="hidden" id="totalpage" name="totalpage" th:value="${totalpage}">
         <input type="text" id="searchContent" name="searchContent"  th:value="${searchContent}"/><button id="subbut" type="button" class="fa fa-search fa-2x">搜索</button>
 
@@ -315,13 +315,13 @@
         <div class="senior">
             <span>[高级搜索]：</span>
 
-            <input type="checkbox" id="mustall" name="mustall" value="yes" th:if="${searchPojo.mustall}" checked/>
-            <input type="checkbox" id="mustall" name="mustall" value="yes" th:if="${searchPojo.mustall==null}" />
+            <input type="checkbox" id="mustall" name="mustall" value=true th:if="${searchPojo.mustall}" checked/>
+            <input type="checkbox" id="mustall" name="mustall" value=true th:if="${searchPojo.mustall==false}" />
             <label for="mustall"> [必须包含全部搜索内容]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</label>
 
 
-            <input type="checkbox" id="pinyin" name="pinyin" value="yes" th:if="${searchPojo.pinyin}" checked/>
-            <input type="checkbox" id="pinyin" name="pinyin" value="yes" th:if="${searchPojo.pinyin==null}" />
+            <input type="checkbox" id="pinyin" name="pinyin" value=true th:if="${searchPojo.pinyin}" checked/>
+            <input type="checkbox" id="pinyin" name="pinyin" value=true th:if="${searchPojo.pinyin==false}" />
             <label for="pinyin"> [按拼音搜索(如：xny=>新能源，xinnengyuan=>新能源)]</label>
 
 
@@ -361,9 +361,9 @@
             <span th:if="${item.tags != null}" th:text="${item.tags}" style="color: #518a78"/>
             <!--<span style="color: #518a78">新闻</span>-->
         </p>
-        <p th:text="${#strings.substring(item.content,0,200)+'......'}" th:if="${#strings.length(item.content)>=200 and searchPojo.pinyin !=null}"></p>
-        <p th:text="${item.content}" th:if="${#strings.length(item.content)<200 and searchPojo.pinyin!=null}"></p>
-        <p th:utext="${item.content}" th:if="${searchPojo.pinyin==null}"></p>
+        <p th:text="${#strings.substring(item.content,0,200)+'......'}" th:if="${#strings.length(item.content)>=200 and searchPojo.pinyin}"></p>
+        <p th:text="${item.content}" th:if="${#strings.length(item.content)<200 and searchPojo.pinyin}"></p>
+        <p th:utext="${item.content}" th:if="${searchPojo.pinyin==false}"></p>
         <hr style=" height:2px;border:none;border-top:2px dotted #185598;" />
     </div>
 
